@@ -5,48 +5,28 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 from typing import List, Optional
 
 # --- API Key Configuration ---
-# In a real application, these keys would come from:
-# - Environment variables (RECOMMENDED for production)
-# - A database
-# - A configuration file (less secure if committed to git)
-
-# For this PoC, we'll use a hardcoded set.
-# DO NOT hardcode API keys in a production environment!
-# Example: export API_KEY_1="your_secret_key_1"
-# API_KEYS = {os.getenv("API_KEY_1"), os.getenv("API_KEY_2")} etc.
-# For simplicity in this PoC:
 API_KEYS = {
     "my-secret-api-key-123", # Replace with your actual keys
     "another-secret-key-456" # Add more as needed
 }
 
-# Define where the API key is expected:
-# 1. In a header named 'X-API-Key'
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-# 2. As a query parameter named 'api_key' (less secure for production but useful for quick testing)
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
-
 
 async def get_api_key(
     header_api_key: Optional[str] = Security(api_key_header),
     query_api_key: Optional[str] = Security(api_key_query)
 ) -> str:
-    """
-    Dependency function to validate API key from header or query parameter.
-    """
     if header_api_key in API_KEYS:
         return header_api_key
     if query_api_key in API_KEYS:
         return query_api_key
     
-    # If no valid key is found, raise an HTTPException
     raise HTTPException(
         status_code=401,
         detail="Invalid or missing API Key. Provide it in 'X-API-Key' header or 'api_key' query parameter."
     )
-
 # --- End API Key Configuration ---
-
 
 app = FastAPI(
     title="YouTube Transcript API Service",
@@ -56,18 +36,15 @@ app = FastAPI(
 
 @app.get("/")
 async def root():
-    """
-    Root endpoint for the API.
-    """
     return {"message": "Welcome to the YouTube Transcript API Service! Use /transcript/{video_id} endpoint."}
 
-# Protect the /transcript endpoint with API key authentication
 @app.get("/transcript/{video_id}")
 async def get_video_transcript(
     video_id: str,
-    api_key: str = Depends(get_api_key), # Add this line to require API key
+    api_key: str = Depends(get_api_key),
     lang: Optional[str] = Query(None, description="Specify a preferred language code (e.g., 'en', 'de', 'es'). If not found, it will try to find other languages. If multiple, it will try to find the first one in the list."),
-    all_langs: bool = Query(False, description="Set to true to return all available language transcripts' metadata instead of just one transcript.")
+    all_langs: bool = Query(False, description="Set to true to return all available language transcripts' metadata instead of just one transcript."),
+    plain_text: bool = Query(False, description="Set to true to receive the transcript as a single block of plain text, without timestamps or segments.") # New parameter
 ):
     """
     Fetches the transcript for a given YouTube video ID.
@@ -76,10 +53,9 @@ async def get_video_transcript(
     - **video_id**: The ID of the YouTube video.
     - **lang** (optional): Preferred language code (e.g., 'en', 'de').
     - **all_langs** (optional): If true, returns metadata for all available transcript languages.
+    - **plain_text** (optional): If true, returns transcript as plain text string.
     """
-    # The API key has already been validated by the Depends(get_api_key) dependency
-    # You can optionally use the 'api_key' variable here if you need to log or track which key was used.
-    print(f"API Key used: {api_key}") # For logging/debugging purposes
+    print(f"API Key used: {api_key}")
 
     try:
         if all_langs:
@@ -99,14 +75,24 @@ async def get_video_transcript(
             }
         else:
             languages = [lang] if lang else []
-            
             transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
-            return {
-                "video_id": video_id,
-                "type": "transcript_content",
-                "language": lang if lang else "auto-detected",
-                "transcript": transcript_data
-            }
+
+            if plain_text:
+                # Concatenate all text segments into a single string
+                full_text_transcript = " ".join([segment['text'] for segment in transcript_data])
+                return {
+                    "video_id": video_id,
+                    "type": "plain_text_transcript",
+                    "language": lang if lang else "auto-detected",
+                    "transcript": full_text_transcript
+                }
+            else:
+                return {
+                    "video_id": video_id,
+                    "type": "transcript_content",
+                    "language": lang if lang else "auto-detected",
+                    "transcript": transcript_data
+                }
 
     except NoTranscriptFound:
         raise HTTPException(status_code=404, detail="No transcript found for this video in the specified language or any available language.")
@@ -115,4 +101,4 @@ async def get_video_transcript(
     except NoVideosGiven:
         raise HTTPException(status_code=400, detail="Invalid request: No video ID provided or invalid format.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {str(e)}")=f"An unexpected server error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {str(e)}")
