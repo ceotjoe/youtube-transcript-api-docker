@@ -1,0 +1,16 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  youtube-transcript-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: youtube-transcript-api-service
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    # Add environment variables here for production API keys
+    # environment:
+    #   - API_KEY_1=your_actual_secret_key_1
+    #   - API_KEY_2=your_actual_secret_key_2
