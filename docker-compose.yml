@@ -1,6 +1,7 @@
-# docker-compose.yml
-version: '3.8'
+# docker-compose.yml (for Docker Compose V1 compatibility)
+version: '2.4' # Using a version supported by Docker Compose V1 clients
 
+# Service definitions are directly at the root in V1, under 'services' in V2+
 services:
   youtube-transcript-api:
     build:
@@ -8,9 +9,5 @@ services:
       dockerfile: Dockerfile
     container_name: youtube-transcript-api-service
     ports:
-      - "8000:8000"
-    restart: unless-stopped
-    # Add environment variables here for production API keys
-    # environment:
-    #   - API_KEY_1=your_actual_secret_key_1
-    #   - API_KEY_2=your_actual_secret_key_2
+      - "8000:8000" # Host_port:Container_port
+    restart: unless-stopped # This directive was also supported in later V1 versions
