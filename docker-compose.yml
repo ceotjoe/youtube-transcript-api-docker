@@ -1,7 +1,6 @@
 # docker-compose.yml (for Docker Compose V1 compatibility)
 version: '2.4' # Using a version supported by Docker Compose V1 clients
 
-# Service definitions are directly at the root in V1, under 'services' in V2+
 services:
   youtube-transcript-api:
     build:
@@ -10,4 +9,14 @@ services:
     container_name: youtube-transcript-api-service
     ports:
       - "8000:8000" # Host_port:Container_port
-    restart: unless-stopped # This directive was also supported in later V1 versions
+    restart: unless-stopped
+    environment:
+      - API_KEYS_SECRET=${API_KEYS_SECRET} # This will load from the .env file
+      # Define your API keys as environment variables
+      # Each key should be separated by a comma (or another delimiter you choose)
+      # In a real scenario, you might list them individually or load from a .env file
+      #- API_KEYS_SECRET=my-secret-api-key-123,another-secret-key-456,super-secret-key-789
+      # You could also list them individually if you prefer
+      # - YT_API_KEY_1=my-secret-api-key-123
+      # - YT_API_KEY_2=another-secret-key-456
+      # ... and then load them one by one in main.py
