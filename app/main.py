@@ -1,7 +1,8 @@
 # app/main.py
 from fastapi import FastAPI, HTTPException, Query, Security, Depends
 from fastapi.security import APIKeyHeader, APIKeyQuery
-from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled, NoVideosGiven
+# Corrected import: Removed NoVideosGiven
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled, CouldNotRetrieveTranscript
 from typing import List, Optional
 
 # --- API Key Configuration ---
@@ -44,7 +45,7 @@ async def get_video_transcript(
     api_key: str = Depends(get_api_key),
     lang: Optional[str] = Query(None, description="Specify a preferred language code (e.g., 'en', 'de', 'es'). If not found, it will try to find other languages. If multiple, it will try to find the first one in the list."),
     all_langs: bool = Query(False, description="Set to true to return all available language transcripts' metadata instead of just one transcript."),
-    plain_text: bool = Query(False, description="Set to true to receive the transcript as a single block of plain text, without timestamps or segments.") # New parameter
+    plain_text: bool = Query(False, description="Set to true to receive the transcript as a single block of plain text, without timestamps or segments.")
 ):
     """
     Fetches the transcript for a given YouTube video ID.
@@ -56,6 +57,9 @@ async def get_video_transcript(
     - **plain_text** (optional): If true, returns transcript as plain text string.
     """
     print(f"API Key used: {api_key}")
+
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Video ID cannot be empty.")
 
     try:
         if all_langs:
@@ -78,7 +82,6 @@ async def get_video_transcript(
             transcript_data = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
 
             if plain_text:
-                # Concatenate all text segments into a single string
                 full_text_transcript = " ".join([segment['text'] for segment in transcript_data])
                 return {
                     "video_id": video_id,
@@ -98,7 +101,9 @@ async def get_video_transcript(
         raise HTTPException(status_code=404, detail="No transcript found for this video in the specified language or any available language.")
     except TranscriptsDisabled:
         raise HTTPException(status_code=403, detail="Transcripts are disabled for this video by the video owner.")
-    except NoVideosGiven:
-        raise HTTPException(status_code=400, detail="Invalid request: No video ID provided or invalid format.")
+    except CouldNotRetrieveTranscript:
+        # Catch a more general error if YouTube's scraping fails for other reasons
+        raise HTTPException(status_code=500, detail="Could not retrieve transcript. This may be due to a temporary issue with YouTube or aggressive scraping detection.")
     except Exception as e:
+        # A catch-all for any other unexpected errors
         raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {str(e)}")
