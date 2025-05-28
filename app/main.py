@@ -1,15 +1,30 @@
 # app/main.py
+import os # Import the os module to access environment variables
 from fastapi import FastAPI, HTTPException, Query, Security, Depends
 from fastapi.security import APIKeyHeader, APIKeyQuery
-# Corrected import: Removed NoVideosGiven
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled, CouldNotRetrieveTranscript
 from typing import List, Optional
 
 # --- API Key Configuration ---
-API_KEYS = {
-    "my-secret-api-key-123", # Replace with your actual keys
-    "another-secret-key-456" # Add more as needed
-}
+# Load API keys from an environment variable
+# API_KEYS_SECRET should be a comma-separated string of keys
+api_keys_str = os.getenv("API_KEYS_SECRET")
+
+if not api_keys_str:
+    # Log a warning or raise an error if API_KEYS_SECRET is not set (e.g., during development)
+    # For production, this should ideally be an error or a critical warning
+    print("WARNING: API_KEYS_SECRET environment variable not set. API authentication might not work as expected.")
+    API_KEYS = set() # Empty set if no keys are provided
+else:
+    API_KEYS = set(api_keys_str.split(',')) # Split the string into a set of keys
+
+# If you prefer to list them individually:
+# API_KEYS = {
+#     os.getenv("YT_API_KEY_1"),
+#     os.getenv("YT_API_KEY_2")
+# }
+# API_KEYS = {key for key in API_KEYS if key is not None} # Filter out None if some env vars are missing
+
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
@@ -18,16 +33,22 @@ async def get_api_key(
     header_api_key: Optional[str] = Security(api_key_header),
     query_api_key: Optional[str] = Security(api_key_query)
 ) -> str:
+    """
+    Dependency function to validate API key from header or query parameter.
+    """
     if header_api_key in API_KEYS:
         return header_api_key
     if query_api_key in API_KEYS:
         return query_api_key
     
+    # If no valid key is found, raise an HTTPException
     raise HTTPException(
         status_code=401,
         detail="Invalid or missing API Key. Provide it in 'X-API-Key' header or 'api_key' query parameter."
     )
+
 # --- End API Key Configuration ---
+
 
 app = FastAPI(
     title="YouTube Transcript API Service",
@@ -50,11 +71,6 @@ async def get_video_transcript(
     """
     Fetches the transcript for a given YouTube video ID.
     Requires a valid API Key in 'X-API-Key' header or 'api_key' query parameter.
-
-    - **video_id**: The ID of the YouTube video.
-    - **lang** (optional): Preferred language code (e.g., 'en', 'de').
-    - **all_langs** (optional): If true, returns metadata for all available transcript languages.
-    - **plain_text** (optional): If true, returns transcript as plain text string.
     """
     print(f"API Key used: {api_key}")
 
@@ -102,8 +118,6 @@ async def get_video_transcript(
     except TranscriptsDisabled:
         raise HTTPException(status_code=403, detail="Transcripts are disabled for this video by the video owner.")
     except CouldNotRetrieveTranscript:
-        # Catch a more general error if YouTube's scraping fails for other reasons
         raise HTTPException(status_code=500, detail="Could not retrieve transcript. This may be due to a temporary issue with YouTube or aggressive scraping detection.")
     except Exception as e:
-        # A catch-all for any other unexpected errors
         raise HTTPException(status_code=500, detail=f"An unexpected server error occurred: {str(e)}")
